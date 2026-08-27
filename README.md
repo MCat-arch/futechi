@@ -123,3 +123,37 @@ graphdb/
    │  └─ docker-compose.neo4j.yml       # service Neo4j lokal dev
    └─ monitoring/
       └─ health_checks.md               # daftar health check operasional minimum
+# Poultry GraphRAG-Vet
+
+## Local dev with Docker
+
+Use Docker for Neo4j only. The Python app can stay in `venv` for now.
+
+### Why
+- Neo4j runs with the same version/config on every machine.
+- Data survives container restarts via named volumes.
+- APOC is enabled once in compose, instead of manual setup.
+
+### How it works
+- `ops/docker/docker-compose.neo4j.yml` starts one Neo4j container.
+- Port `7474` exposes Neo4j Browser.
+- Port `7687` exposes Bolt for the Python driver.
+- `NEO4J_AUTH` creates the first admin user.
+- Named volumes keep database files, logs, import files, and plugins outside your code.
+
+### Run
+From repo root:
+
+```powershell
+Copy-Item .env.example .env
+docker compose -f ops\docker\docker-compose.neo4j.yml up -d
+```
+
+Then open:
+- http://localhost:7474
+
+### Stop
+
+```powershell
+docker compose -f ops\docker\docker-compose.neo4j.yml down
+```
