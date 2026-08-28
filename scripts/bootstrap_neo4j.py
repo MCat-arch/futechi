@@ -10,13 +10,17 @@ from pathlib import Path
 
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable
+from dotenv import load_dotenv
+
+ROOT = Path(__file__).parent.parent
+load_dotenv(ROOT / ".env")
 
 NEO4J_URI = os.getenv("NEO4J_URI")
 NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 CYPHER_ROOT = (
-    Path(__file__).parent.parent / "src" / "futechi_graphrag" / "pipelines" / "knowledge_graph" / "cypher"
+    ROOT / "src" / "futechi_graphrag" / "pipelines" / "knowledge_graph" / "cypher"
 )
 
 ORDERED_FOLDERS = ["constraints", "indexes", "seeds"]
@@ -119,6 +123,22 @@ def bootstrap() -> None:
         RuntimeError: If Neo4j cannot become available.
         ValueError: If required Neo4j environment variables are missing.
     """
+    missing = [
+        name
+        for name, value in {
+            "NEO4J_URI": NEO4J_URI,
+            "NEO4J_USERNAME": NEO4J_USERNAME,
+            "NEO4J_PASSWORD": NEO4J_PASSWORD,
+        }.items()
+        if not value
+    ]
+    if missing:
+        raise ValueError(
+            "Missing required Neo4j environment variable(s): "
+            + ", ".join(missing)
+            + ". Define them in the project root .env file."
+        )
+
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USERNAME, NEO4J_PASSWORD))
     wait_for_neo4j(driver)
 

@@ -56,5 +56,55 @@ class Cage:
         self.active_case_id = case_id
         self.cooldown_reason = None
         self.cooldown_cycles_remaining = 0
+        self.anomaly_count_during_cooldown = 0        
+
+    def enter_cooldown(self, reason: CooldownReason, cycles: int) -> None:
+        """Dipanggil saat user konfirmasi tidak sakit atau sehat"""
+        self.status = CageStatus.COOLDOWN
+        self.cooldown_reason = reason
+        self.cooldown_cycles_remaining = cycles
         self.anomaly_count_during_cooldown = 0
-        
+        self.active_case_id = None
+
+    def register_anomaly_during_cooldown(self) -> None:
+        """
+        Dicatat tiap kali ada anomali terdeteksi di background saat cage
+        masih cooldown (dipakai untuk safety-net escalation).
+        """
+        self.anomaly_count_during_cooldown += 1
+
+    def tick_cooldown_cycle(self) -> None:
+        """Dipanggil tiap kali 1 siklus deteksi terjadwal berlalu (2x/hari).
+        Otomatis membuat cage eligible lagi begitu cooldown_cycles_remaining
+        mencapai 0.
+        """
+        if self.status != CageStatus.COOLDOWN:
+            return
+        self.cooldown_cycles_remaining = max(0, self.cooldown_cycles_remaining - 1)
+        if self.cooldown_cycles_remaining == 0:
+            self._make_eligible_again()
+    
+    def mark_recovered(self) -> None:
+        """
+        Dipanggil MANUAL oleh petugas setelah case CONFIRMED_SICK selesai
+        masa treatment-nya. Sengaja tidak otomatis dari waktu -- masa
+        penyembuhan penyakit unggas bervariasi dan tidak bisa diasumsikan.
+        """
+        self._make_eligible_again()
+
+    def reset_monitoring(self) -> None:
+        """
+        Dipanggil MANUAL oleh petugas jika ayam di cage ini diganti/
+        dipindah di tengah masa exclusion -- independen dari alur recovery
+        otomatis, supaya ayam pengganti tidak ikut ter-exclude keliru.
+        """
+        self._make_eligible_again()
+
+    def _make_eligible_again(self) -> None:
+        self.status = CageStatus.ELIGIBLE
+        self.cooldown_reason = None
+        self.cooldown_cycles_remaining = 0
+        self.anomaly_count_during_cooldown = 0
+        self.active_case_id = None
+
+    

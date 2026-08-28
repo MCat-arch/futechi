@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: futechi-graphrag
+Version: 0.1.0
+Summary: Poultry GraphRAG-Vet system
+Requires-Python: >=3.11
+Requires-Dist: pydantic<3.0,>=2.9
+Requires-Dist: pydantic-settings<3.0,>=2.5
+Requires-Dist: neo4j<6.0,>=5.24
+Requires-Dist: langgraph<0.7,>=0.2
+Requires-Dist: langchain-core<0.4,>=0.3
+Requires-Dist: openai<2.0,>=1.50
+Requires-Dist: pyyaml<7.0,>=6.0
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn[standard]>=0.32
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.8; extra == "dev"
+Requires-Dist: mypy>=1.0; extra == "dev"

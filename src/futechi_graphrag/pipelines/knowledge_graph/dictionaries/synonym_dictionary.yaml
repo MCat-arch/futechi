@@ -1,0 +1,20 @@
+# Mapping variasi istilah mentah (dari output VLM yang belum baku) ke
+# nama canonical di canonical_terms.yaml. Dipakai oleh canonical_mapper.py
+# (Tahap 6) sebagai lapisan kedua setelah exact match gagal.
+#
+# CATATAN: daftar ini masih AWAL/CONTOH -- akan berkembang seiring VLM
+# sungguhan diuji dengan gambar nyata (istilah mentah VLM sulit ditebak
+# sebelum benar-benar dicoba). Tambahkan entri baru begitu ditemukan
+# pola istilah yang sering gagal exact-match.
+
+lowered_head_posture:
+  - "head down"
+  - "drooping head"
+  - "lowered neck"
+  - "head hanging low"
+
+irregular_feather_appearance:
+  - "ruffled looking feathers"
+  - "messy feathers"
+  - "feathers sticking out"
+  - "disheveled plumage"

@@ -14,6 +14,7 @@ dependencies = [
     "langgraph>=0.2,<0.7",       # pin upper bound since it's pre-1.0
     "langchain-core>=0.3,<0.4",
     "openai>=1.50,<2.0",          # deliberately exclude v2 until you test the migration
+    "pyyaml>=6.0,<7.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
 ]

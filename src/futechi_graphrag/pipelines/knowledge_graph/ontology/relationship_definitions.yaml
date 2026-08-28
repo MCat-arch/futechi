@@ -1,0 +1,81 @@
+# Definisi relationship type. specificity/onset_stage/mechanism di
+# HAS_VISUAL_FEATURE dan HAS_SYMPTOM adalah kunci multi-hop differential
+# reasoning (lihat diskusi Tahap Methodology) -- JANGAN dihilangkan meski
+# terasa opsional, karena inilah pengganti scoring numerik yang sengaja
+# tidak dipakai di sistem ini.
+
+# Definisi relationship type. specificity/onset_stage/mechanism di
+# HAS_VISUAL_FEATURE dan HAS_SYMPTOM adalah kunci multi-hop differential
+# reasoning (lihat diskusi Tahap Methodology) -- JANGAN dihilangkan meski
+# terasa opsional, karena inilah pengganti scoring numerik yang sengaja
+# tidak dipakai di sistem ini.
+
+HAS_VISUAL_FEATURE:
+  from: Disease
+  to: VisualFeature
+  properties:
+    specificity:
+      type: enum
+      values: [high, medium, low]
+      required: true
+      description: Seberapa khas fitur ini untuk penyakit tsb (vs penyakit lain).
+    onset_stage:
+      type: enum
+      values: [early, middle, late]
+      required: true
+      description: Tahap penyakit saat fitur ini biasanya mulai muncul.
+    mechanism:
+      type: string
+      required: false
+      description: Penjelasan patofisiologi singkat, dipakai LLM utk reasoning naratif.
+
+HAS_SYMPTOM:
+  from: Disease
+  to: Symptom
+  properties:
+    specificity:
+      type: enum
+      values: [high, medium, low]
+      required: true
+    onset_stage:
+      type: enum
+      values: [early, middle, late]
+      required: true
+    mechanism:
+      type: string
+      required: false
+
+ASSOCIATED_WITH_ENVIRONMENT:
+  from: Disease
+  to: EnvironmentalCondition
+  properties:
+    strength:
+      type: enum
+      values: [high, medium, low]
+      required: true
+      description: Seberapa kuat kondisi lingkungan ini berkontribusi terhadap penyakit.
+
+REQUIRES_INSPECTION:
+  from: Disease
+  to: InspectionAction
+  properties: {}
+
+MITIGATED_BY:
+  from: Disease
+  to: MitigationAction
+  properties: {}
+
+TREATED_WITH:
+  from: Disease
+  to: MedicalTreatment
+  properties:
+    dosage:
+      type: string
+      required: true
+      description: >
+        Dosis spesifik untuk kombinasi Disease-MedicalTreatment ini --
+        BOLEH beda dari MedicalTreatment.dosage default kalau ada
+        penyesuaian per-penyakit (mis. durasi terapi beda).
+    withdrawal_period:
+      type: string
+      required: true

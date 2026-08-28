@@ -1,0 +1,138 @@
+# Definisi node type untuk Bovine... eh, Poultry Knowledge Graph.
+# File ini adalah SUMBER KEBENARAN untuk validasi entity (dipakai oleh
+# OntologyRepository di Tahap 4) -- bukan sekadar dokumentasi.
+#
+# Setiap perubahan di sini WAJIB disinkronkan dengan:
+#   - cypher/constraints/*.cypher (constraint uniqueness)
+#   - cypher/seeds/*.cypher (data aktual)
+
+Disease:
+  description: >
+    Satu penyakit ayam yang dikenal sistem. base_severity bersifat statis
+    (representasi bahaya intrinsik penyakit), severity aktual per-case
+    dihitung dinamis (lihat domain/value_objects/severity.py di Tahap 2).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^DIS-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    desc:
+      type: string
+      required: true
+    base_severity:
+      type: enum
+      values: [low, medium, high, critical]
+      required: true
+    notifiable:
+      type: boolean
+      required: false
+      description: >
+        True jika penyakit ini wajib dilaporkan ke otoritas kesehatan
+        hewan setempat (mis. Avian Influenza) -- dipakai untuk memicu
+        pesan tambahan di output Modul C.
+
+VisualFeature:
+  description: Fitur visual yang bisa diekstrak VLM dari citra ayam.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^VF-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+      description: Nama canonical, dipakai sebagai parameter query Modul B.
+
+Symptom:
+  description: >
+    Gejala klinis yang biasanya TIDAK bisa dilihat langsung dari citra
+    (butuh pemeriksaan manual/InspectionAction), beda dari VisualFeature.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^SY-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+
+EnvironmentalCondition:
+  description: >
+    Status semantik hasil normalisasi sensor lingkungan (lihat
+    sensor_normalizer.py di Tahap 6). HANYA 3 kondisi dasar sesuai raw
+    sensor payload edge device: temperature, humidity, ammonia.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^EC-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    threshold_ref:
+      type: string
+      required: false
+      description: Referensi nilai ambang batas yang dipakai sensor_normalizer.
+
+InspectionAction:
+  description: >
+    Tindakan pemeriksaan manual. Ditampilkan SEGERA saat case dibuat
+    (Tahap 1 reveal, lihat Case.attach_reasoning_result di Tahap 2).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^IA-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    instruction:
+      type: string
+      required: true
+
+MitigationAction:
+  description: >
+    Tindakan mitigasi/manajemen non-medis. Ditampilkan SETELAH user
+    konfirmasi "Sakit" dengan penyakit spesifik (Tahap 2 reveal).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^MA-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    instruction:
+      type: string
+      required: true
+    priority:
+      type: enum
+      values: [low, medium, high]
+      required: true
+
+MedicalTreatment:
+  description: >
+    Referensi obat/terapi. Akses TERBUKA untuk semua user (bukan
+    di-gate role), tapi ditampilkan pada Tahap 2 reveal yang sama dengan
+    MitigationAction -- withdrawal_period WAJIB selalu terisi.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^MT-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    dosage:
+      type: string
+      required: true
+    withdrawal_period:
+      type: string
+      required: true
+      description: >
+        Wajib diisi meski "Tidak berlaku" untuk terapi suportif non-obat --
+        JANGAN pernah dikosongkan (lihat MedicalReference.__post_init__
+        di Tahap 2 yang menolak string kosong).

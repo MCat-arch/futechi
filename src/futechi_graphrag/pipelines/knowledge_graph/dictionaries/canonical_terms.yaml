@@ -1,0 +1,14 @@
+# Daftar istilah resmi (canonical) yang diakui ontologi -- dipakai
+# OntologyRepository.is_valid_visual_feature() dkk di Tahap 4, dan sebagai
+# acuan validasi konsistensi seed data (lihat scripts/validate_seed_consistency.py).
+#
+# ATURAN: setiap nama di sini WAJIB juga ada sebagai node di seed cypher
+# dengan property `name` yang SAMA PERSIS. Validator akan menandai
+# ketidakcocokan.
+
+visual_features:
+  - lowered_head_posture
+  - irregular_feather_appearance
+
+environment_conditions:
+  - humidity_attention
