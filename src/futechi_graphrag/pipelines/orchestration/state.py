@@ -26,11 +26,11 @@ class ChatState:
 
     case_id: str
     cage_id: str
-    case_status: str = "pending_confirmation"
+    case_status: str = "PENDING_CONFIRMATION"
     confirmed_disease: str | None = None
-    messages: list[ChatMessage] = field(default_factory=list)
+    messages: list[ChatMessage] = field(default_factory=list) # tidak ikut disinkronkan dari CaseStore; tetap dari checkpointer
     graph_context: GraphContext | None = None
-    cage_history: list[CageHistoryEntry] = field(default_factory=list)
+    cage_history: list[CageHistoryEntry] = field(default_factory=list) # tidak dianggap sebagai sumber diagnosis utama
 
 
 class PipelineState(TypedDict):

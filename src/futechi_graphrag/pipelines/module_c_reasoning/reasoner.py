@@ -158,16 +158,20 @@ def build_chat_prompt(
             for feat in c.matched_visual_features + c.related_symptoms:
                 lines.append(
                     f"  - {feat.name}: specificity={feat.specificity}, "
-                    f"onset_stage={feat.onset_stage}"
+                    f"onset_stage={feat.onset_stage}, mechanism={feat.mechanism}"
                 )
+            for env in c.matched_environment:
+                lines.append(f" - lingkungan {env.name}: strength={env.strength}")
 
     lines.append("")
     lines.append("RIWAYAT PERCAKAPAN:")
-    for m in messages:
-        lines.append(f"{m.role}: {m.content}")
+    if not messages:
+        lines.append("(tidak ada riwayat perconversation)")
+    else:
+        for m in messages:
+            lines.append(f"{m.role}: {m.content}")
 
     return "\n".join(lines)
-
 
 def reason_chat_turn(
     graph_context: GraphContext,
@@ -178,12 +182,16 @@ def reason_chat_turn(
     llm_client: LLMClient,
 ) -> str:
     """
-    Reasoning untuk satu giliran chat -- mengembalikan teks bebas
-    (bukan structured output seperti reason()), karena chat memang
-    percakapan bebas. TETAP terikat hard constraint yang sama +
-    rule #11 (riwayat kandang), lihat CHAT_SYSTEM_PROMPT.
+    Reasoning untuk satu giliran chat selalu menjaga:
+    - graph_context = evidence utama
+    - cage_history = catatan informasional
+    - case_status dan confirmed_disease = konteks status
     """
     prompt = build_chat_prompt(
-        graph_context, cage_history_summary, case_status, confirmed_disease, messages
+        graph_context=graph_context,
+        cage_history_summary=cage_history_summary,
+        case_status=case_status,
+        confirmed_disease=confirmed_disease,
+        messages=messages,
     )
     return llm_client.generate(system_prompt=CHAT_SYSTEM_PROMPT, user_prompt=prompt)

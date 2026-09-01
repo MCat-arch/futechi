@@ -26,10 +26,15 @@ def sync_case_state(
     if record is None:
         return state
 
-    state.case_status = str(record.get("status") or state.case_status)
+    #ambil status yang paling baru dari source of truth (CaseStore) untuk memastikan konsistensi dengan update yang dilakukan di luar chat
+    raw_status = record.get("status")
+    if raw_status is not None:
+        state.case_status = str(raw_status)
+    #ambil confirmed disease terbaru 
+    confirmed_condition = record.get("confirmed_condition")
     state.confirmed_disease = (
-        str(record.get("confirmed_condition"))
-        if record.get("confirmed_condition") is not None
+        str(confirmed_condition)
+        if confirmed_condition is not None
         else None
     )
     return state
@@ -45,18 +50,55 @@ def load_cage_history(
     """Attach a short informational history of recent resolved cases for this cage."""
     store = case_store or CaseStore()
     state.cage_history = store.find_resolved_cases_by_cage(
-        state.cage_id,
+        cage_id=state.cage_id,
         exclude_case_id=state.case_id,
         limit=limit,
         since_days=since_days,
     )
     return state
 
+def apply_retrieval_scope(
+    state: ChatState,
+    graph_context: GraphContext | None,
+) -> GraphContext :
+    """membatasi / fokus ke candidate retrieval berdasarkan status case
+    """
+    if graph_context is None:
+        return GraphContext(candidates=[])
+
+    status = str(state.case_status or "").strip().lower()
+
+    if status == "confirmed_sick":
+        confirmed_name = str(state.confirmed_disease or "").strip()
+        if not confirmed_name:
+            return GraphContext(candidates=[])
+
+        filtered = [
+            candidate
+            for candidate in graph_context.candidates
+            if candidate.disease_name.strip().lower() == confirmed_name.lower()
+        ]
+        return GraphContext(candidates=filtered)
+
+    if status in {"confirmed_not_sick", "confirmed_healthy"}:
+        return GraphContext(candidates=[])
+    return graph_context
+
+def retrieve_conditional(
+    state: ChatState,
+    graph_context: GraphContext | None = None,
+) -> ChatState:
+    """retrive graph context hanya jika case status belum confirmed, atau jika sudah confirmed tapi tidak ada confirmed disease"""
+    resolved_context = graph_context if graph_context is not None else state.graph_context
+    state.graph_context = apply_retrieval_scope(state, resolved_context)
+    return state
 
 def build_chat_graph(case_store: CaseStore | None = None):
     """Build the state graph for the chat continuation flow.
 
-    The order is intentionally fixed to match the Design Addendum:
+    The order 
+    )
+    Build LangGraph chat flow dengan urutan yang benar:
     sync_case_state -> load_cage_history -> retrieve -> respond.
     """
     try:
