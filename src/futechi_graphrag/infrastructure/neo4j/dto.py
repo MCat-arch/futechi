@@ -1,47 +1,49 @@
 """
 DTO (Data Transfer Object) untuk hasil retrieval dari Neo4j.
 
-Kenapa ini di infrastructure/, bukan domain/? Struktur data di sini
-(disease_id, matched_visual_features, dst) mengikuti PERSIS bentuk
-RETURN clause di retrieve_disease_context.cypher -- ini representasi
-"raw hasil query", bukan konsep bisnis murni. Konsep bisnis murni
-(RelatedCondition, DiseaseActionBundle) sudah ada di domain layer
-(Tahap 2) dan akan dibentuk oleh Modul C (Tahap 7) dari GraphContext
-di sini -- bukan langsung dipakai sebagai satu tipe yang sama.
+Ini SATU-SATUNYA representasi GraphContext di sistem (Modul B menghasilkan,
+Modul C, state LangGraph, dan chat graph mengonsumsi). Strukturnya mengikuti
+RETURN clause di retrieve_disease_context.cypher -- representasi "hasil
+query", bukan konsep bisnis murni. Konsep bisnis (RelatedCondition,
+DiseaseActionBundle) dibentuk Modul C dari GraphContext ini.
 
-Kalau nanti query Cypher-nya berubah bentuk, yang perlu disesuaikan
-cukup file ini + map_record_to_candidate(), TIDAK sampai menjalar ke
-domain layer.
+Kalau query Cypher berubah bentuk, yang perlu disesuaikan cukup file ini +
+map_record_to_candidate(), TIDAK sampai menjalar ke domain layer.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
 class AttributedFeature:
     """
-    Representasi satu VisualFeature ATAU Symptom yang match, lengkap
-    dengan atribut relasi (specificity/onset_stage/mechanism) -- kunci
-    multi-hop differential reasoning di Modul C.
+    Satu VisualFeature ATAU Symptom beserta atribut relasinya
+    (specificity/onset_stage/mechanism/clinical_note) -- bahan multi-hop
+    differential reasoning di Modul C.
     """
 
     name: str
     specificity: str | None
     onset_stage: str | None
     mechanism: str | None
+    clinical_note: str | None = None
 
 
 @dataclass(frozen=True)
 class MatchedEnvironmentCondition:
     name: str
     strength: str | None
+    note: str | None = None
 
 
 @dataclass(frozen=True)
 class RawInspectionAction:
     name: str
     instruction: str | None
+    performed_by: str | None = None
 
 
 @dataclass(frozen=True)
@@ -73,67 +75,89 @@ class DiseaseCandidate:
     inspection_actions: list[RawInspectionAction]
     mitigation_actions: list[RawMitigationAction]
     medical_treatments: list[RawMedicalTreatment]
+    condition_type: str | None = None
+    validation_note: str | None = None
+    diagnostic_note: str | None = None
 
 
 @dataclass(frozen=True)
 class GraphContext:
     """
     Hasil lengkap satu kali retrieval -- bisa berisi beberapa DiseaseCandidate
-    sekaligus (sesuai desain: 1 query ambil semua kandidat, bukan satu-satu).
+    sekaligus (1 query ambil semua kandidat, bukan satu-satu).
     """
 
     candidates: list[DiseaseCandidate]
 
     def is_empty(self) -> bool:
-        """
-        True jika retrieval tidak menemukan kandidat penyakit sama sekali
-        -- ini yang memicu boundary_check ke fallback di Modul B (Tahap 5).
-        """
+        """True jika retrieval tidak menemukan kandidat -- memicu retry/fallback."""
         return len(self.candidates) == 0
 
 
-def _filter_valid(items: list[dict]) -> list[dict]:
+def _filter_valid(items: list[Mapping[str, Any]] | None) -> list[Mapping[str, Any]]:
     """
     Buang entri hasil OPTIONAL MATCH yang tidak menemukan pasangan
-    (Cypher mengembalikan map dengan semua field None untuk kasus ini,
-    bukan menghilangkan entrinya dari list).
+    (Cypher mengembalikan map dengan semua field None, bukan menghilangkan
+    entrinya dari list).
     """
-    return [item for item in items if item.get("name") is not None]
+    return [item for item in items or [] if item and item.get("name") is not None]
 
 
-def map_record_to_candidate(record: dict) -> DiseaseCandidate:
-    """
-    Konversi satu baris hasil query (dict, dari Record.data()) menjadi
-    DiseaseCandidate yang sudah tervalidasi tipe.
-    """
+def _attributed(item: Mapping[str, Any]) -> AttributedFeature:
+    return AttributedFeature(
+        name=item["name"],
+        specificity=item.get("specificity"),
+        onset_stage=item.get("onset_stage"),
+        mechanism=item.get("mechanism"),
+        clinical_note=item.get("clinical_note"),
+    )
+
+
+def map_record_to_candidate(record: Mapping[str, Any]) -> DiseaseCandidate:
+    """Konversi satu baris hasil query (dict dari Record.data()) menjadi DiseaseCandidate."""
     return DiseaseCandidate(
         disease_id=record["disease_id"],
         disease_name=record["disease_name"],
-        desc=record["disease_desc"],
+        desc=record.get("disease_desc") or "",
         base_severity=record["base_severity"],
         notifiable=bool(record.get("notifiable")),
+        condition_type=record.get("condition_type"),
+        validation_note=record.get("validation_note"),
+        diagnostic_note=record.get("diagnostic_note"),
         matched_visual_features=[
-            AttributedFeature(**item)
-            for item in _filter_valid(record.get("matched_visual_features", []))
+            _attributed(item) for item in _filter_valid(record.get("matched_visual_features"))
         ],
         related_symptoms=[
-            AttributedFeature(**item)
-            for item in _filter_valid(record.get("related_symptoms", []))
+            _attributed(item) for item in _filter_valid(record.get("related_symptoms"))
         ],
         matched_environment=[
-            MatchedEnvironmentCondition(**item)
-            for item in _filter_valid(record.get("matched_environment", []))
+            MatchedEnvironmentCondition(
+                name=item["name"], strength=item.get("strength"), note=item.get("note")
+            )
+            for item in _filter_valid(record.get("matched_environment"))
         ],
         inspection_actions=[
-            RawInspectionAction(**item)
-            for item in _filter_valid(record.get("inspection_actions", []))
+            RawInspectionAction(
+                name=item["name"],
+                instruction=item.get("instruction"),
+                performed_by=item.get("performed_by"),
+            )
+            for item in _filter_valid(record.get("inspection_actions"))
         ],
         mitigation_actions=[
-            RawMitigationAction(**item)
-            for item in _filter_valid(record.get("mitigation_actions", []))
+            RawMitigationAction(
+                name=item["name"],
+                instruction=item.get("instruction"),
+                priority=item.get("priority"),
+            )
+            for item in _filter_valid(record.get("mitigation_actions"))
         ],
         medical_treatments=[
-            RawMedicalTreatment(**item)
-            for item in _filter_valid(record.get("medical_treatments", []))
+            RawMedicalTreatment(
+                name=item["name"],
+                dosage=item.get("dosage"),
+                withdrawal_period=item.get("withdrawal_period"),
+            )
+            for item in _filter_valid(record.get("medical_treatments"))
         ],
     )

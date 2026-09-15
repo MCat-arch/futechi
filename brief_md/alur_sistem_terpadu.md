@@ -88,7 +88,7 @@ Turunannya: `case_id` dibuat **server** (edge hanya mengirim `event_id`), karena
 
 #### K6 — Granularitas node ekstraksi & mapping di LangGraph
 `_rev`: satu "Node 1: Image→Text Extraction" (termasuk agregasi 3 frame).
-Kode: Modul A sudah dipecah jadi `vlm_extractor`, `frame_aggregator`, `confidence_filter`, `canonical_mapper`, `sensor_normalizer`, `mapping_validator`.
+Kode: Modul A sudah dipecah jadi `mllm_extractor` (menggantikan `vlm_extractor` — tidak ada layanan VLM terpisah, MLLM dipanggil lewat client LLM yang sama), `canonical_mapper`, `frame_aggregator`, `confidence_filter`, `sensor_normalizer`, `mapping_validator`. Urutan di kode: ekstraksi → canonical mapping per frame → agregasi mayoritas → filter confidence.
 
 | Opsi | Keterangan | Konsekuensi |
 |---|---|---|

@@ -55,28 +55,30 @@ class SeverityResult:
 
     level: SeverityLevel
     base_severity: str
-    onset_stage: str
+    onset_stage: str | None  # None = sumber data tidak menyebutkan onset
     multiplier: float
     raw_score: float
 
-def compute_severity(base_severity: str, onset_stage: str) -> SeverityResult:
+def compute_severity(base_severity: str, onset_stage: str | None) -> SeverityResult:
     """
     Hitung severity final dari base_severity Disease (statis di KG) dan
     onset_stage yang match pada deteksi saat ini (dinamis per-case).
 
     Args:
         base_severity: salah satu dari "low" / "medium" / "high" / "critical".
-        onset_stage: salah satu dari "early" / "middle" / "late".
+        onset_stage: salah satu dari "early" / "middle" / "late", atau None
+            jika KG tidak punya data onset -- multiplier netral 1.0 dipakai,
+            BUKAN menebak tahap.
 
     Raises:
         ValueError: jika base_severity atau onset_stage tidak dikenal.
     """
     if base_severity not in BASE_SEVERITY_SCORE:
         raise ValueError(f"base_severity tidak dikenal: {base_severity!r}")
-    if onset_stage not in ONSET_STAGE_MULTIPLIER:
+    if onset_stage is not None and onset_stage not in ONSET_STAGE_MULTIPLIER:
         raise ValueError(f"onset_stage tidak dikenal: {onset_stage!r}")
 
-    multiplier = ONSET_STAGE_MULTIPLIER[onset_stage]
+    multiplier = 1.0 if onset_stage is None else ONSET_STAGE_MULTIPLIER[onset_stage]
     base_score = BASE_SEVERITY_SCORE[base_severity]
     raw_score = base_score * multiplier
 

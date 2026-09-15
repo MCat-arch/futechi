@@ -1,20 +1,51 @@
-# Mapping variasi istilah mentah (dari output VLM yang belum baku) ke
-# nama canonical di canonical_terms.yaml. Dipakai oleh canonical_mapper.py
-# (Tahap 6) sebagai lapisan kedua setelah exact match gagal.
+# Mapping variasi istilah mentah ke nama canonical di canonical_terms.yaml.
 #
-# CATATAN: daftar ini masih AWAL/CONTOH -- akan berkembang seiring VLM
-# sungguhan diuji dengan gambar nyata (istilah mentah VLM sulit ditebak
-# sebelum benar-benar dicoba). Tambahkan entri baru begitu ditemukan
-# pola istilah yang sering gagal exact-match.
+# Dengan MLLM, output utama SUDAH dibatasi ke kosakata canonical. Kamus ini
+# adalah jaring pengaman untuk:
+#   1. label di `other_observations` (istilah bebas MLLM di luar daftar)
+#   2. retry Modul B (remap label unmapped sebelum query ulang)
+#
+# Pencocokan dilakukan setelah normalisasi (huruf kecil, "_"/"-" jadi spasi).
+# Tambahkan entri baru begitu ditemukan istilah MLLM yang sering gagal dipetakan.
 
-lowered_head_posture:
-  - "head down"
-  - "drooping head"
-  - "lowered neck"
-  - "head hanging low"
-
-irregular_feather_appearance:
-  - "ruffled looking feathers"
-  - "messy feathers"
-  - "feathers sticking out"
-  - "disheveled plumage"
+lowered_head_posture: ["head down", "drooping head", "lowered head", "lethargic", "lesu", "kepala tertunduk", "depressed bird"]
+irregular_feather_appearance: ["ruffled feathers", "ruffled looking feathers", "messy feathers", "dull feathers", "disheveled plumage", "bulu kusam", "bulu kusut", "bulu berdiri"]
+watery_foamy_eyes: ["watery eyes", "foamy eyes", "frothy eyes", "mata berair", "mata berbusa"]
+conjunctivitis: ["red eyes", "inflamed eyelids", "eye inflammation", "konjungtivitis", "mata merah"]
+mild_infraorbital_sinus_swelling: ["sinus swelling", "swollen sinus", "swelling below eye", "infraorbital swelling", "sinus bengkak"]
+nasal_discharge: ["runny nose", "nasal exudate", "discharge from nostrils", "leleran hidung", "ingus"]
+wet_feathers_around_nostrils: ["wet nostril feathers", "dirty nostrils", "bulu hidung basah"]
+marked_head_swelling: ["swollen head", "head swelling", "facial swelling severe", "kepala bengkak"]
+swollen_eyes_shut: ["eyes swollen shut", "closed swollen eyes", "mata bengkak tertutup"]
+torticollis: ["twisted neck", "wry neck", "head tilt", "star gazing", "leher terpuntir", "tortikolis"]
+facial_wattle_swelling: ["swollen face", "swollen wattles", "face and wattle swelling", "wajah bengkak", "pial bengkak"]
+matted_facial_feathers: ["crusted facial feathers", "sticky face feathers", "bulu wajah menggumpal"]
+open_mouth_breathing: ["panting", "beak open breathing", "mouth breathing", "megap", "megap-megap", "napas mulut terbuka"]
+gasping_neck_extended: ["gasping with extended neck", "neck stretched gasping", "megap leher menjulur"]
+bloody_mucus_beak: ["blood around beak", "bloody mucus", "lendir berdarah", "darah di paruh"]
+head_tremor: ["shaking head", "head shaking", "tremor", "kepala gemetar"]
+paralysis_staggering_gait: ["paralysis", "staggering", "ataxia", "unable to stand", "lumpuh", "sempoyongan"]
+sunken_eyes: ["hollow eyes", "dehydrated eyes", "mata cekung"]
+pasty_vent: ["dirty vent", "soiled vent", "wet vent feathers", "pasty butt", "kloaka kotor", "bulu kloaka basah"]
+pale_comb: ["pale wattles", "anemic comb", "jengger pucat"]
+cyanotic_comb_wattle: ["blue comb", "purple comb", "dark comb", "cyanosis", "jengger kebiruan", "jengger biru hitam"]
+shank_petechiae: ["red spots on legs", "leg hemorrhages", "bintik merah kaki", "petechiae kaki"]
+emaciation: ["thin bird", "underweight", "prominent keel", "kurus"]
+lameness: ["limping", "difficulty walking", "pincang"]
+swollen_hock_joint: ["swollen hock", "swollen joint", "sendi bengkak"]
+wings_held_away_from_body: ["wings spread", "spread wings", "drooping wings away", "sayap terbuka"]
+diarrhea: ["watery droppings", "loose droppings", "diare", "feses encer"]
+green_diarrhea: ["greenish droppings", "green droppings", "diare hijau"]
+white_watery_diarrhea: ["white droppings", "white diarrhea", "diare putih"]
+dark_mucoid_diarrhea: ["dark droppings", "mucoid droppings", "diare gelap", "feses berlendir"]
+bloody_feces: ["blood in droppings", "bloody droppings", "feses berdarah"]
+visible_worms_in_feces: ["worms in droppings", "worms visible", "cacing di feses"]
+thin_soft_eggshell: ["soft shelled egg", "thin shell", "telur lembek", "kerabang tipis"]
+shell_less_egg: ["shellless egg", "egg without shell", "telur tanpa kerabang"]
+rough_wrinkled_eggshell: ["wrinkled egg", "rough shell", "kerabang bergelombang", "kerabang kasar"]
+misshapen_egg: ["deformed egg", "abnormal egg shape", "telur bentuk aneh"]
+pale_uneven_eggshell: ["pale egg", "uneven shell color", "telur pucat"]
+visible_mold_on_feed: ["moldy feed", "mouldy feed", "fungus on feed", "pakan berjamur"]
+caked_damp_feed: ["clumped feed", "wet feed", "pakan menggumpal", "pakan lembap"]
+uneven_flock_growth: ["uneven body size", "non uniform flock", "pertumbuhan tidak seragam"]
+huddling_in_shade_or_near_fan: ["crowding near fan", "huddling in shade", "berkerumun dekat kipas"]

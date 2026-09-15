@@ -1,8 +1,9 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from futechi_graphrag.domain.value_objects.graph_context import GraphContext
 from futechi_graphrag.infrastructure.neo4j.cypher_runner import CypherRunner
+from futechi_graphrag.infrastructure.neo4j.dto import GraphContext, map_record_to_candidate
 from futechi_graphrag.infrastructure.neo4j.repositories.ontology_repository import (
     OntologyRepository,
 )
@@ -29,8 +30,11 @@ class DiseaseRepository:
         )
 
     def retrieve_context(
-        self, visual_features: list[str], environment_conditions: list[str]
-    ) -> list[GraphContext]:
+        self,
+        visual_features: list[str],
+        environment_conditions: list[str],
+        excluded_disease_ids: Sequence[str] = (),
+    ) -> GraphContext:
         """Validate canonical inputs, execute retrieval, and map every row."""
         invalid_visual = [
             name for name in visual_features
@@ -46,6 +50,9 @@ class DiseaseRepository:
                 f"visual_features={invalid_visual}, "
                 f"environment_conditions={invalid_environment}"
             )
+        if not visual_features:
+            # Template membutuhkan minimal satu fitur visual yang cocok.
+            return GraphContext(candidates=[])
 
         query = self._query_path.read_text(encoding="utf-8")
         records = self._runner.run_read_query(
@@ -53,28 +60,14 @@ class DiseaseRepository:
             {
                 "visual_features": visual_features,
                 "environment_conditions": environment_conditions,
+                "excluded_disease_ids": list(excluded_disease_ids),
             },
         )
-        return [self._to_context(record) for record in records]
+        return GraphContext(
+            candidates=[map_record_to_candidate(self._as_dict(record)) for record in records]
+        )
 
     @staticmethod
-    def _to_context(record: Any) -> GraphContext:
-        """Convert a Neo4j record into an immutable application DTO."""
-        def values(key: str) -> tuple[dict[str, Any], ...]:
-            return tuple(
-                item for item in (record[key] or []) if item.get("name") is not None
-            )
-
-        return GraphContext(
-            disease_id=record["disease_id"],
-            disease_name=record["disease_name"],
-            disease_desc=record["disease_desc"],
-            base_severity=record["base_severity"],
-            notifiable=bool(record["notifiable"]),
-            matched_visual_features=values("matched_visual_features"),
-            related_symptoms=values("related_symptoms"),
-            matched_environment=values("matched_environment"),
-            inspection_actions=values("inspection_actions"),
-            mitigation_actions=values("mitigation_actions"),
-            medical_treatments=values("medical_treatments"),
-        )
+    def _as_dict(record: Any) -> dict[str, Any]:
+        """neo4j.Record -> dict; dict biasa (mis. di test) diteruskan apa adanya."""
+        return record.data() if hasattr(record, "data") else dict(record)

@@ -19,10 +19,13 @@ from futechi_graphrag.infrastructure.neo4j.dto import DiseaseCandidate
 
 def build_evidence_strings(candidate: DiseaseCandidate) -> list[str]:
     """
-    Bangun daftar evidence yang bisa dibaca manusia dari fitur/gejala
-    yang match, lengkap dengan specificity & onset_stage -- format PERSIS
-    seperti contoh di desain awal:
+    Bangun daftar evidence yang bisa dibaca manusia HANYA dari hal yang
+    benar-benar teramati/cocok: fitur visual yang match dan kondisi
+    lingkungan yang match. Format:
     "lowered_head_posture (high specificity, early stage)"
+
+    related_symptoms SENGAJA tidak dimasukkan -- itu gejala terkait dari
+    graph yang BELUM teramati, bukan bukti.
     """
     evidence: list[str] = []
     for feature in candidate.matched_visual_features:
@@ -34,14 +37,9 @@ def build_evidence_strings(candidate: DiseaseCandidate) -> list[str]:
         suffix = f" ({', '.join(parts)})" if parts else ""
         evidence.append(f"{feature.name}{suffix}")
 
-    for symptom in candidate.related_symptoms:
-        parts = []
-        if symptom.specificity:
-            parts.append(f"{symptom.specificity} specificity")
-        if symptom.onset_stage:
-            parts.append(f"{symptom.onset_stage} stage")
-        suffix = f" ({', '.join(parts)})" if parts else ""
-        evidence.append(f"{symptom.name}{suffix}")
+    for env in candidate.matched_environment:
+        suffix = f" ({env.strength} strength)" if env.strength else ""
+        evidence.append(f"lingkungan: {env.name}{suffix}")
 
     return evidence
 

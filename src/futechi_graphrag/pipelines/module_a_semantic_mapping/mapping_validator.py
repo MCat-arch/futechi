@@ -4,10 +4,10 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 # Modul A: mapping validation
 # ---------------------------------------------------------------------------
-# Saat terlalu banyak label tidak dapat dipetakan ke canonical term, kita tidak
-# ingin mengirim data berisik ke Modul B. Fungsional ini mencegah pipeline
-# melanjutkan dengan data yang terlalu banyak tidak aman, dan memicu flag untuk
-# manual review / insufficient data.
+# Case ditandai manual review jika:
+#   - tidak ada satu pun fitur canonical yang lolos (tidak ada bahan query
+#     graph, padahal edge sudah mengonfirmasi anomali), ATAU
+#   - proporsi label unmapped melebihi threshold (data terlalu berisik).
 # ---------------------------------------------------------------------------
 
 
@@ -16,10 +16,10 @@ def validate_mapping(
     unmapped_count: int,
     threshold_ratio: float = 0.5,
 ) -> tuple[bool, float]:
-    """Return whether the unmapped ratio exceeds the review threshold."""
+    """Return (manual_review_required, unmapped_ratio)."""
     total = mapped_count + unmapped_count
-    if total == 0:
-        return False, 0.0
+    unmapped_ratio = unmapped_count / total if total else 0.0
 
-    unmapped_ratio = unmapped_count / total
+    if mapped_count == 0:
+        return True, unmapped_ratio
     return unmapped_ratio > threshold_ratio, unmapped_ratio

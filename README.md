@@ -42,9 +42,9 @@ graphdb/
 │
 │     ├─ pipelines/
 │     │  ├─ module_a_semantic_mapping/
-│     │  │  ├─ vlm_extractor.py       # ekstraksi fitur visual multi-frame
+│     │  │  ├─ mllm_extractor.py      # ekstraksi fitur visual per frame via MLLM (kosakata tertutup)
+│     │  │  ├─ canonical_mapper.py    # map istilah ke ontology canonical (per frame)
 │     │  │  ├─ frame_aggregator.py    # majority vote + confidence aggregation
-│     │  │  ├─ canonical_mapper.py    # map istilah ke ontology canonical
 │     │  │  ├─ sensor_normalizer.py   # raw sensor -> status semantik
 │     │  │  └─ mapping_validator.py   # cek unmapped ratio >50% => manual review
 │     │  ├─ module_b_graph_retrieval/

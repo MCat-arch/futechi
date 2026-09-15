@@ -5,6 +5,7 @@ sekali jalan seperti melakukan migrasi di database sql. script ini akan mencatat
 
 import os
 import sys
+import argparse
 import time
 from pathlib import Path
 
@@ -27,7 +28,7 @@ ORDERED_FOLDERS = ["constraints", "indexes", "seeds"]
 
 def wait_for_neo4j(driver, max_retries=10, delay_seconds=5):
     for attempt in range(1, max_retries + 1):
-        try:
+        tr
             driver.verify_connectivity()
             print("Successfully connected to Neo4j.")
             return
@@ -68,6 +69,15 @@ def mark_applied(session, filename: str) -> None:
         "SET m.applied_at = datetime()",
         filename=filename
     )
+
+def reset_database(session) -> None:
+    """Hapus SEMUA node & relasi, termasuk catatan _SchemaMigration.
+
+    Constraint dan index tidak ikut terhapus (file-nya memakai IF NOT EXISTS,
+    jadi aman diterapkan ulang). Dipakai saat isi seed berubah, karena file
+    seed yang sudah tercatat tidak akan dijalankan ulang.
+    """
+    session.run("MATCH (n) DETACH DELETE n")
 
 def split_statements(cypher_text: str) -> list[str]:
     """Split a Cypher file into executable statements.
@@ -112,7 +122,7 @@ def run_cypher_file(session, filepath: Path) -> None:
     for statement in split_statements(content):
         session.run(statement)
 
-def bootstrap() -> None:
+def bootstrap(reset: bool = False) -> None:
     """Initialize Neo4j schema and seed data in a deterministic order.
 
     The process connects to Neo4j, waits until it is ready, then applies
@@ -143,6 +153,10 @@ def bootstrap() -> None:
     wait_for_neo4j(driver)
 
     with driver.session() as session:
+        if reset:
+            print("RESET node dan relasi di database Neo4j. Constraint dan index tidak ikut terhapus.")
+            reset_database(session)
+
         applied = get_applied_migrations(session)
 
         for folder in ORDERED_FOLDERS:
@@ -174,3 +188,10 @@ def bootstrap() -> None:
 
 if __name__ == "__main__":
     bootstrap()
+    parser = argparse.ArgumentParser(description="Bootstrap schema & seed Neo4j database with constraints, indexes, and seed data.")
+    parser.add_argument("--reset", action="store_true", help="Kosongkan SELURUH isi database sebelum menerapkan migrasi.")
+    parser.add_argument("--yes", action="store_true", help="Konfirmasi wajib untuk --reset.")
+    args = parser.parse_args()
+    if args.reset and not args.yes:
+        parser.error("--reset menghapus seluruh isi database; tambahkan --yes untuk konfirmasi.")
+    bootstrap(reset=args.reset)

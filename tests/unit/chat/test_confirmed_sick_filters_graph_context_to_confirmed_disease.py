@@ -1,3 +1,8 @@
+from futechi_graphrag.infrastructure.neo4j.dto import DiseaseCandidate, GraphContext
+from futechi_graphrag.pipelines.orchestration.chat_graph import apply_retrieval_scope
+from futechi_graphrag.pipelines.orchestration.state import ChatState
+
+
 def test_confirmed_sick_filters_graph_context_to_confirmed_disease() -> None:
     graph_context = GraphContext(
         candidates=[

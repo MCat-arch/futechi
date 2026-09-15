@@ -30,7 +30,9 @@ class CaseContextInput:
     cage_id: str
     blok_id: str
     visual_features: list[VisualFeatureObservation]
-    environment_snapshot: EnvironmentSnapshot
+    # Opsional: data sensor lingkungan belum tentu tersedia (lihat K10).
+    environment_snapshot: EnvironmentSnapshot | None = None
+    capture_quality: str = "high"
 
 
 @dataclass(frozen=True)
@@ -70,7 +72,7 @@ class DifferentialNoteItem(BaseModel):
     differential_note: str = Field(
         description="1-2 kalimat menjelaskan seberapa mungkin kandidat ini "
         "dibanding kandidat lain, berdasarkan specificity/onset_stage/"
-        "mechanism yang diberikan di konteks."
+        "mechanism/catatan yang diberikan di konteks."
     )
 
 

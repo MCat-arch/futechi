@@ -1,42 +1,36 @@
 from __future__ import annotations
 
-from futechi_graphrag.domain.value_objects.observation import VisualFeatureObservation
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
+
+from futechi_graphrag.infrastructure.neo4j.repositories.ontology_repository import (
+    resolve_term,
+)
 
 from .types import RawVisualCandidate
 
 
 def map_to_canonical_terms(
-    candidates: list[RawVisualCandidate],
-    alias_map: dict[str, list[str]],
-) -> tuple[list[VisualFeatureObservation], list[str]]:
+    candidates: Sequence[RawVisualCandidate],
+    alias_map: Mapping[str, Sequence[str]],
+    fuzzy_cutoff: float | None = None,
+) -> tuple[list[RawVisualCandidate], list[RawVisualCandidate]]:
     """
-    Memetakan kandidat visual mentah ke istilah kanonik menggunakan alias_map.
-    Mengembalikan tuple dari:
-    - daftar VisualFeatureObservation yang berhasil dipetakan
-    - daftar label kandidat yang tidak dapat dipetakan
+    Petakan label per frame ke nama canonical (cocok persis dengan nama atau
+    alias setelah normalisasi; fuzzy opsional). Dijalankan SEBELUM agregasi
+    supaya sinonim berbeda di frame berbeda dihitung sebagai tanda yang sama.
+
+    Returns:
+        (kandidat terpetakan dengan label canonical, kandidat tidak terpetakan)
     """
-    mapped: list[VisualFeatureObservation] = []
-    unmapped: list[str] = []
+    mapped: list[RawVisualCandidate] = []
+    unmapped: list[RawVisualCandidate] = []
 
     for candidate in candidates:
-        normalized_label = candidate.label.lower().strip()
-        canonical_term: str | None = None
-
-        for canonical, aliases in alias_map.items():
-            alias_values = {alias.lower().strip() for alias in aliases}
-            if normalized_label in alias_values or normalized_label == canonical.lower():
-                canonical_term = canonical
-                break
-
-        if canonical_term is None:
-            unmapped.append(candidate.label)
-            continue
-
-        mapped.append(
-            VisualFeatureObservation(
-                name=canonical_term,
-                confidence=candidate.confidence,
-            )
-        )
+        canonical = resolve_term(candidate.label, alias_map, fuzzy_cutoff)
+        if canonical is None:
+            unmapped.append(candidate)
+        else:
+            mapped.append(replace(candidate, label=canonical))
 
     return mapped, unmapped

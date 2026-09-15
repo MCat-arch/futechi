@@ -11,6 +11,7 @@ def build_params(
     environment_conditions: Iterable[str],
     ontology_repository: OntologyRepository | None = None,
     confidence_threshold: float = 0.6,
+    excluded_disease_ids: Iterable[str] = (),
 ) -> dict[str, list[str]]:
     """Build validated Neo4j parameters from Modul A observations."""
     if not 0.0 <= confidence_threshold <= 1.0:
@@ -41,4 +42,5 @@ def build_params(
     return {
         "visual_features": list(dict.fromkeys(selected_features)),
         "environment_conditions": conditions,
+        "excluded_disease_ids": list(dict.fromkeys(excluded_disease_ids)),
     }

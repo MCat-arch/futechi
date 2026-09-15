@@ -12,6 +12,7 @@ button-confirmed updates that happen outside the chat itself.
 from __future__ import annotations
 
 from futechi_graphrag.infrastructure.checkpointer import get_checkpointer
+from futechi_graphrag.infrastructure.neo4j.dto import GraphContext
 from futechi_graphrag.infrastructure.persistence.case_store import CaseStore
 from futechi_graphrag.pipelines.orchestration.state import ChatState
 

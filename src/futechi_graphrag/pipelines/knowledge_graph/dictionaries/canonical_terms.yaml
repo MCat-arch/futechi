@@ -1,14 +1,192 @@
-# Daftar istilah resmi (canonical) yang diakui ontologi -- dipakai
-# OntologyRepository.is_valid_visual_feature() dkk di Tahap 4, dan sebagai
-# acuan validasi konsistensi seed data (lihat scripts/validate_seed_consistency.py).
+# Kosakata resmi (canonical) yang diakui ontologi.
 #
-# ATURAN: setiap nama di sini WAJIB juga ada sebagai node di seed cypher
-# dengan property `name` yang SAMA PERSIS. Validator akan menandai
-# ketidakcocokan.
+# Dipakai oleh:
+#   - OntologyRepository  : validasi parameter query Modul B & katalog kosakata
+#   - mllm_extractor.py   : daftar fitur tertutup yang boleh dilaporkan MLLM
+#   - scripts/validate_seed_consistency.py
+#
+# ATURAN: setiap entri di sini WAJIB ada sebagai node di seed cypher dengan
+# `name`, `description`, dan target/mode/source yang SAMA PERSIS. Validator
+# akan menandai ketidakcocokan.
 
 visual_features:
-  - lowered_head_posture
-  - irregular_feather_appearance
+  # --- target: bird (terlihat pada crop individu ayam) ---
+  - name: lowered_head_posture
+    target: bird
+    description: "Ayam lesu: kepala tertunduk, mata setengah tertutup, kurang responsif"
+  - name: irregular_feather_appearance
+    target: bird
+    description: "Bulu kusam, kusut, atau berdiri tidak rapi"
+  - name: watery_foamy_eyes
+    target: bird
+    description: "Mata berair atau ada busa di sudut mata"
+  - name: conjunctivitis
+    target: bird
+    description: "Kelopak/selaput mata merah dan meradang"
+  - name: mild_infraorbital_sinus_swelling
+    target: bird
+    description: "Pembengkakan ringan di bawah atau depan mata (sinus infraorbital)"
+  - name: nasal_discharge
+    target: bird
+    description: "Leleran atau cairan keluar dari lubang hidung"
+  - name: wet_feathers_around_nostrils
+    target: bird
+    description: "Bulu di sekitar lubang hidung basah atau kotor"
+  - name: marked_head_swelling
+    target: bird
+    description: "Pembengkakan kepala yang nyata di sekitar mata dan wajah"
+  - name: swollen_eyes_shut
+    target: bird
+    description: "Mata bengkak sampai tertutup"
+  - name: torticollis
+    target: bird
+    description: "Leher terpuntir atau kepala miring abnormal"
+  - name: facial_wattle_swelling
+    target: bird
+    description: "Wajah bengkak, terutama di sekitar mata dan pial"
+  - name: matted_facial_feathers
+    target: bird
+    description: "Bulu wajah menggumpal karena eksudat"
+  - name: open_mouth_breathing
+    target: bird
+    description: "Bernapas dengan mulut terbuka atau megap-megap"
+  - name: gasping_neck_extended
+    target: bird
+    description: "Megap dengan leher menjulur ke atas dan mulut terbuka"
+  - name: bloody_mucus_beak
+    target: bird
+    description: "Lendir bercampur darah di sekitar paruh"
+  - name: head_tremor
+    target: bird
+    description: "Kepala gemetar atau tremor"
+  - name: paralysis_staggering_gait
+    target: bird
+    description: "Kelumpuhan, tidak mampu berdiri, atau jalan sempoyongan"
+  - name: sunken_eyes
+    target: bird
+    description: "Mata cekung (tanda dehidrasi)"
+  - name: pasty_vent
+    target: bird
+    description: "Bulu sekitar kloaka basah, kotor, atau menggumpal"
+  - name: pale_comb
+    target: bird
+    description: "Jengger dan pial pucat"
+  - name: cyanotic_comb_wattle
+    target: bird
+    description: "Jengger atau pial kebiruan sampai kehitaman (sianosis)"
+  - name: shank_petechiae
+    target: bird
+    description: "Bintik perdarahan (petechiae) pada kulit kaki"
+  - name: emaciation
+    target: bird
+    description: "Badan kurus, tulang dada menonjol"
+  - name: lameness
+    target: bird
+    description: "Pincang, sulit berjalan atau berdiri"
+  - name: swollen_hock_joint
+    target: bird
+    description: "Sendi hock (tumit) bengkak"
+  - name: wings_held_away_from_body
+    target: bird
+    description: "Sayap dibuka atau dijauhkan dari badan"
+  # --- target: feces_litter (feses/litter yang ikut terlihat di sekitar ayam) ---
+  - name: diarrhea
+    target: feces_litter
+    description: "Feses encer (diare) tanpa warna khas"
+  - name: green_diarrhea
+    target: feces_litter
+    description: "Feses encer berwarna kehijauan"
+  - name: white_watery_diarrhea
+    target: feces_litter
+    description: "Feses encer berwarna putih"
+  - name: dark_mucoid_diarrhea
+    target: feces_litter
+    description: "Feses gelap dan berlendir"
+  - name: bloody_feces
+    target: feces_litter
+    description: "Darah pada feses atau litter"
+  - name: visible_worms_in_feces
+    target: feces_litter
+    description: "Cacing terlihat pada feses"
+  # --- target: egg ---
+  - name: thin_soft_eggshell
+    target: egg
+    description: "Kerabang telur tipis atau lembek"
+  - name: shell_less_egg
+    target: egg
+    description: "Telur tanpa kerabang"
+  - name: rough_wrinkled_eggshell
+    target: egg
+    description: "Kerabang kasar atau bergelombang"
+  - name: misshapen_egg
+    target: egg
+    description: "Bentuk telur abnormal"
+  - name: pale_uneven_eggshell
+    target: egg
+    description: "Warna kerabang pucat atau pigmentasi tidak merata"
+  # --- target: feed ---
+  - name: visible_mold_on_feed
+    target: feed
+    description: "Jamur terlihat pada pakan (biru-hijau atau hitam)"
+  - name: caked_damp_feed
+    target: feed
+    description: "Pakan menggumpal atau lembap"
+  # --- target: flock ---
+  - name: uneven_flock_growth
+    target: flock
+    description: "Ukuran atau pertumbuhan ayam dalam kelompok tidak seragam"
+  - name: huddling_in_shade_or_near_fan
+    target: flock
+    description: "Ayam berkerumun di area teduh atau dekat kipas"
+
+symptoms:
+  - name: tracheal_rales
+    mode: audio
+    description: "Suara ngorok (rales) saat bernapas"
+  - name: coughing
+    mode: audio
+    description: "Batuk"
+  - name: foul_odor_exudate
+    mode: olfactory
+    description: "Bau busuk dari eksudat wajah atau hidung"
+  - name: egg_production_drop
+    mode: production_record
+    description: "Penurunan produksi telur"
+  - name: sudden_high_mortality
+    mode: mortality_record
+    description: "Kematian mendadak dalam jumlah tinggi"
+  - name: increased_mortality
+    mode: mortality_record
+    description: "Mortalitas meningkat bertahap"
+  - name: increased_water_intake
+    mode: production_record
+    description: "Konsumsi air minum meningkat"
+  - name: decreased_performance
+    mode: production_record
+    description: "Performa (bobot atau produksi) menurun"
 
 environment_conditions:
-  - humidity_attention
+  - name: temperature_attention
+    source: sensor
+    description: "Suhu kandang di atas ambang perhatian"
+  - name: humidity_attention
+    source: sensor
+    description: "Kelembapan kandang di atas ambang perhatian"
+  - name: ammonia_attention
+    source: sensor
+    description: "Kadar amonia kandang di atas ambang perhatian"
+  - name: overcrowding
+    source: manual_inspection
+    description: "Kepadatan kandang berlebih"
+  - name: wet_litter
+    source: manual_inspection
+    description: "Litter atau alas kandang basah"
+  - name: uneven_flock_clustering
+    source: visual_observation
+    description: "Ayam menggerombol tidak merata"
+  - name: feather_pecking_cannibalism
+    source: visual_observation
+    description: "Patuk bulu atau kanibalisme"
+  - name: poor_feed_quality
+    source: manual_inspection
+    description: "Inspeksi visual pakan buruk (warna, bau, tekstur, debu, gumpalan, kelembapan)"

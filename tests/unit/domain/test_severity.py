@@ -40,6 +40,14 @@ def test_unknown_onset_stage_raises_value_error():
         compute_severity(base_severity="low", onset_stage="unknown")
 
 
+def test_missing_onset_stage_uses_neutral_multiplier():
+    result = compute_severity(base_severity="critical", onset_stage=None)
+    assert result.multiplier == 1.0
+    assert result.onset_stage is None
+    assert result.raw_score == 4.0
+    assert result.level == SeverityLevel.HIGH
+
+
 def test_severity_result_includes_breakdown_for_audit():
     result = compute_severity(base_severity="high", onset_stage="middle")
     assert result.base_severity == "high"

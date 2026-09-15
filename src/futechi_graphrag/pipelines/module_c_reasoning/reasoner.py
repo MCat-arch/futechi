@@ -2,16 +2,21 @@
 Orkestrasi utama Modul C -- dua fungsi entry point:
 
   - reason()            : Tier 1, dipanggil saat case baru dibuat
-                           (diagnostic_graph, Tahap 8).
+                           (diagnostic_graph).
   - reason_chat_turn()   : dipanggil tiap giliran chat lanjutan
-                           (chat_graph, Tahap 8) -- lihat Design Addendum
-                           soal sync_case_state & load_cage_history yang
-                           terjadi SEBELUM fungsi ini dipanggil (bukan di
-                           dalam file ini).
+                           (chat_graph) -- sync_case_state & load_cage_history
+                           terjadi SEBELUM fungsi ini dipanggil.
 """
-from futechi_graphrag.domain.value_objects.observation import RelatedCondition
+from futechi_graphrag.domain.value_objects.observation import (
+    EnvironmentSnapshot,
+    RelatedCondition,
+)
 from futechi_graphrag.infrastructure.llm.client import LLMClient
-from futechi_graphrag.infrastructure.neo4j.dto import DiseaseCandidate, GraphContext
+from futechi_graphrag.infrastructure.neo4j.dto import (
+    AttributedFeature,
+    DiseaseCandidate,
+    GraphContext,
+)
 from futechi_graphrag.pipelines.module_c_reasoning.deterministic_builders import (
     build_disease_action_bundles,
     build_evidence_strings,
@@ -38,44 +43,91 @@ from futechi_graphrag.pipelines.module_c_reasoning.severity_selector import (
 _DEFAULT_DIFFERENTIAL_NOTE = "Tidak ada catatan diferensial tersedia dari LLM untuk kandidat ini."
 
 
+def _format_attributed_feature(feature: AttributedFeature) -> str:
+    parts = [
+        f"specificity={feature.specificity or 'tidak diketahui'}",
+        f"onset_stage={feature.onset_stage or 'tidak diketahui'}",
+    ]
+    if feature.mechanism:
+        parts.append(f"mechanism={feature.mechanism}")
+    if feature.clinical_note:
+        parts.append(f"catatan={feature.clinical_note}")
+    return f"{feature.name}: " + ", ".join(parts)
+
+
+def format_candidate_context(candidate: DiseaseCandidate) -> list[str]:
+    """
+    Blok konteks satu kandidat. Fitur visual yang COCOK dipisah tegas dari
+    gejala terkait yang BELUM teramati, supaya LLM tidak memperlakukan
+    gejala dari graph sebagai bukti.
+    """
+    lines = [f"[{candidate.disease_name}]"]
+    if candidate.condition_type:
+        lines.append(f"  jenis kondisi: {candidate.condition_type}")
+
+    lines.append("  fitur visual yang cocok dengan observasi:")
+    lines += [
+        f"    - {_format_attributed_feature(feature)}"
+        for feature in candidate.matched_visual_features
+    ] or ["    - (tidak ada)"]
+
+    if candidate.related_symptoms:
+        lines.append("  gejala terkait (BELUM teramati, perlu pemeriksaan manual):")
+        lines += [
+            f"    - {_format_attributed_feature(symptom)}"
+            for symptom in candidate.related_symptoms
+        ]
+
+    for env in candidate.matched_environment:
+        note = f", catatan={env.note}" if env.note else ""
+        lines.append(f"  lingkungan cocok: {env.name} (strength={env.strength}{note})")
+
+    if candidate.validation_note:
+        lines.append(f"  catatan validasi: {candidate.validation_note}")
+    if candidate.diagnostic_note:
+        lines.append(f"  catatan diagnostik: {candidate.diagnostic_note}")
+    return lines
+
+
+def _format_environment(snapshot: EnvironmentSnapshot | None) -> list[str]:
+    if snapshot is None:
+        return ["Lingkungan: data sensor tidak tersedia"]
+    lines = [
+        f"Lingkungan: suhu {snapshot.temperature_c}°C, "
+        f"kelembapan {snapshot.humidity_percent}%, "
+        f"amonia {snapshot.ammonia_ppm}ppm"
+    ]
+    if snapshot.normalized_conditions:
+        lines.append("Kondisi perhatian: " + ", ".join(snapshot.normalized_conditions))
+    return lines
+
+
 def build_diagnostic_prompt(
     case_context: CaseContextInput, candidates: list[DiseaseCandidate]
 ) -> str:
     """
     Susun teks konteks untuk LLM. SENGAJA tidak menyertakan riwayat
-    kandang (Design Addendum Keputusan 3: riwayat HANYA di chat).
+    kandang (riwayat HANYA di chat).
     """
     lines = [
-        f"Kandang: {case_context.cage_id}, Zona: {case_context.zone_id}",
+        f"Kandang: {case_context.cage_id}, Blok: {case_context.blok_id}",
+        f"Kualitas capture: {case_context.capture_quality}",
         "",
         "Fitur visual teramati:",
     ]
-    for f in case_context.visual_features:
-        lines.append(f"- {f.name} (confidence: {f.confidence:.2f})")
+    lines += [
+        f"- {feature.name} (confidence: {feature.confidence:.2f})"
+        for feature in case_context.visual_features
+    ] or ["- (tidak ada)"]
 
     lines.append("")
-    lines.append(
-        f"Lingkungan: suhu {case_context.environment_snapshot.temperature_c}°C, "
-        f"kelembapan {case_context.environment_snapshot.humidity_percent}%, "
-        f"amonia {case_context.environment_snapshot.ammonia_ppm}ppm"
-    )
-    if case_context.environment_snapshot.normalized_conditions:
-        lines.append(
-            "Kondisi perhatian: "
-            + ", ".join(case_context.environment_snapshot.normalized_conditions)
-        )
+    lines += _format_environment(case_context.environment_snapshot)
 
     lines.append("")
-    lines.append("Kandidat penyakit dari knowledge graph:")
-    for c in candidates:
-        lines.append(f"\n[{c.disease_name}]")
-        for feat in c.matched_visual_features + c.related_symptoms:
-            lines.append(
-                f"  - {feat.name}: specificity={feat.specificity}, "
-                f"onset_stage={feat.onset_stage}, mechanism={feat.mechanism}"
-            )
-        for env in c.matched_environment:
-            lines.append(f"  - lingkungan {env.name}: strength={env.strength}")
+    lines.append("Kandidat kondisi dari knowledge graph:")
+    for candidate in candidates:
+        lines.append("")
+        lines += format_candidate_context(candidate)
 
     return "\n".join(lines)
 
@@ -101,6 +153,7 @@ def reason(
         schema=ReasoningLLMResponse,
     )
 
+    # Catatan untuk nama di luar kandidat diabaikan (aturan: nama wajib persis).
     notes_by_disease = {
         item.disease_name: item.differential_note
         for item in llm_response.differential_notes
@@ -137,7 +190,7 @@ def build_chat_prompt(
     """
     Susun prompt untuk satu giliran chat. Riwayat kandang (jika ada)
     ditulis sebagai blok TERPISAH dari graph context, diberi label
-    eksplisit "informasional" -- sesuai Design Addendum Keputusan 3-4.
+    eksplisit "informasional".
     """
     lines = [f"Status case saat ini: {case_status}"]
     if confirmed_disease:
@@ -153,25 +206,19 @@ def build_chat_prompt(
     if graph_context.is_empty():
         lines.append("(tidak ada data graph terverifikasi untuk konteks ini)")
     else:
-        for c in graph_context.candidates:
-            lines.append(f"[{c.disease_name}]")
-            for feat in c.matched_visual_features + c.related_symptoms:
-                lines.append(
-                    f"  - {feat.name}: specificity={feat.specificity}, "
-                    f"onset_stage={feat.onset_stage}, mechanism={feat.mechanism}"
-                )
-            for env in c.matched_environment:
-                lines.append(f" - lingkungan {env.name}: strength={env.strength}")
+        for candidate in graph_context.candidates:
+            lines += format_candidate_context(candidate)
 
     lines.append("")
     lines.append("RIWAYAT PERCAKAPAN:")
     if not messages:
-        lines.append("(tidak ada riwayat perconversation)")
+        lines.append("(tidak ada riwayat percakapan)")
     else:
-        for m in messages:
-            lines.append(f"{m.role}: {m.content}")
+        for message in messages:
+            lines.append(f"{message.role}: {message.content}")
 
     return "\n".join(lines)
+
 
 def reason_chat_turn(
     graph_context: GraphContext,

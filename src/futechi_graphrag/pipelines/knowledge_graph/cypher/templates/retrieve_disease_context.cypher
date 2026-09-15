@@ -2,27 +2,30 @@
 // Disease sekaligus (bukan satu-satu), supaya LLM di Modul C bisa
 // melakukan multi-hop differential reasoning lintas kandidat.
 //
-// TIDAK ADA gating pada TREATED_WITH -- akses referensi obat terbuka
-// untuk semua user sesuai keputusan desain (urutan TAMPIL-nya yang
-// bertahap, diatur di application layer / Case.resolve(), BUKAN di
-// query ini).
+// TIDAK ADA gating pada TREATED_WITH -- urutan TAMPIL-nya yang bertahap
+// diatur di Case.resolve(), BUKAN di query ini.
 //
 // Parameter:
-//   $visual_features        -- list[str], hasil filter confidence Modul A
-//   $environment_conditions -- list[str], hasil sensor_normalizer Modul A
+//   $visual_features        -- list[str], fitur visual canonical hasil Modul A
+//   $environment_conditions -- list[str], kondisi lingkungan canonical
+//   $excluded_disease_ids   -- list[str], id Disease yang dikecualikan (boleh kosong)
+//
+// Semantik kolom:
+//   matched_visual_features -- HANYA fitur yang cocok dengan observasi
+//   related_symptoms        -- SEMUA gejala penyakit (BELUM teramati)
+//   matched_environment     -- HANYA kondisi lingkungan yang cocok
 //
 // Dipanggil oleh: infrastructure/neo4j/repositories/disease_repository.py
-
-// CATATAN PERFORMA: karena ada beberapa OPTIONAL MATCH independen dari d
-// (symptom, environment, inspection, mitigation, treatment), Neo4j akan
-// membuat cartesian product sementara sebelum di-collect. Untuk ontologi
-// skala kecil (15-30 penyakit, sesuai batasan awal proyek) ini tidak
-// masalah. Kalau KG membesar signifikan (ratusan penyakit dgn banyak
-// relasi), pertimbangkan pecah jadi beberapa subquery terpisah (CALL {})
-// atau pakai APOC untuk menghindari blow-up cartesian product.
+// Bentuk RETURN harus sinkron dengan infrastructure/neo4j/dto.py.
+//
+// CATATAN PERFORMA: beberapa OPTIONAL MATCH independen membuat cartesian
+// product sementara sebelum di-collect. Untuk katalog skala kecil
+// (puluhan penyakit) tidak masalah; jika KG membesar signifikan, pecah
+// menjadi subquery CALL {} per relasi.
 
 MATCH (d:Disease)-[hf:HAS_VISUAL_FEATURE]->(vf:VisualFeature)
 WHERE vf.name IN $visual_features
+  AND NOT d.id IN $excluded_disease_ids
 OPTIONAL MATCH (d)-[hs:HAS_SYMPTOM]->(s:Symptom)
 OPTIONAL MATCH (d)-[ae:ASSOCIATED_WITH_ENVIRONMENT]->(ec:EnvironmentalCondition)
   WHERE ec.name IN $environment_conditions
@@ -33,27 +36,34 @@ RETURN
   d.id AS disease_id,
   d.name AS disease_name,
   d.desc AS disease_desc,
+  d.condition_type AS condition_type,
   d.base_severity AS base_severity,
   d.notifiable AS notifiable,
+  d.validation_note AS validation_note,
+  d.diagnostic_note AS diagnostic_note,
   collect(DISTINCT {
     name: vf.name,
     specificity: hf.specificity,
     onset_stage: hf.onset_stage,
-    mechanism: hf.mechanism
+    mechanism: hf.mechanism,
+    clinical_note: hf.clinical_note
   }) AS matched_visual_features,
   collect(DISTINCT {
     name: s.name,
     specificity: hs.specificity,
     onset_stage: hs.onset_stage,
-    mechanism: hs.mechanism
+    mechanism: hs.mechanism,
+    clinical_note: hs.clinical_note
   }) AS related_symptoms,
   collect(DISTINCT {
     name: ec.name,
-    strength: ae.strength
+    strength: ae.strength,
+    note: ae.note
   }) AS matched_environment,
   collect(DISTINCT {
     name: ia.name,
-    instruction: ia.instruction
+    instruction: ia.instruction,
+    performed_by: ia.performed_by
   }) AS inspection_actions,
   collect(DISTINCT {
     name: ma.name,
@@ -65,5 +75,5 @@ RETURN
     dosage: tw.dosage,
     withdrawal_period: tw.withdrawal_period
   }) AS medical_treatments
-ORDER BY size(matched_visual_features) DESC
+ORDER BY size(matched_visual_features) DESC, disease_id ASC
 LIMIT 20;
