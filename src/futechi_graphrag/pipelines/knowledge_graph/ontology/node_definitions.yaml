@@ -1,0 +1,210 @@
+# Definisi node type untuk Poultry Knowledge Graph.
+# File ini adalah SUMBER KEBENARAN skema -- dipakai oleh
+# scripts/validate_seed_consistency.py untuk memvalidasi seed data
+# (property yang dikenal, nilai enum, property wajib, pola id).
+#
+# Setiap perubahan di sini WAJIB disinkronkan dengan:
+#   - cypher/constraints/*.cypher (constraint uniqueness)
+#   - cypher/seeds/*.cypher (data aktual)
+#   - dictionaries/canonical_terms.yaml (kosakata VisualFeature/Symptom/EnvironmentalCondition)
+
+Disease:
+  description: >
+    Satu penyakit ATAU kondisi kesehatan ayam yang dikenal sistem (termasuk
+    kondisi non-infeksi seperti heat stress & mikotoksikosis, dan kompleks
+    penyakit seperti CCRD -- dibedakan lewat condition_type). base_severity
+    bersifat statis, severity aktual per-case dihitung dinamis (lihat
+    domain/value_objects/severity.py).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^DIS-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    desc:
+      type: string
+      required: true
+    condition_type:
+      type: enum
+      values: [infectious_viral, infectious_bacterial, parasitic, toxic, environmental, disease_complex]
+      required: true
+      description: >
+        disease_complex = bukan diagnosis etiologis tunggal (mis. CCRD).
+        environmental/toxic = kondisi non-infeksi.
+    base_severity:
+      type: enum
+      values: [low, medium, high, critical]
+      required: true
+    notifiable:
+      type: boolean
+      required: true
+      description: >
+        True jika penyakit ini wajib segera dilaporkan ke otoritas kesehatan
+        hewan -- memicu notifiable_notice deterministik di Modul C.
+    validation_note:
+      type: string
+      required: false
+      description: Catatan validasi gejala visual (sesuai / perlu koreksi) dari sumber literatur.
+    diagnostic_note:
+      type: string
+      required: false
+      description: Tingkat akurasi & metode konfirmasi diagnosis (lab/nekropsi) dari sumber literatur.
+    reference_hint:
+      type: string
+      required: false
+      description: Petunjuk sumber rujukan (domain situs) -- sitasi lengkap masih perlu dilengkapi.
+    data_status:
+      type: enum
+      values: [draft_literature, draft_general_knowledge, vet_validated]
+      required: true
+      description: >
+        draft_literature = dari tabel literatur, belum direview dokter hewan.
+        draft_general_knowledge = di luar tabel sumber, perlu review.
+
+VisualFeature:
+  description: >
+    Fitur visual yang bisa diekstrak MLLM dari citra. `name` adalah
+    kosakata tertutup yang diberikan ke prompt ekstraksi (lihat
+    module_a_semantic_mapping/mllm_extractor.py).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^VF-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+      description: Nama canonical, dipakai sebagai parameter query Modul B.
+    observation_target:
+      type: enum
+      values: [bird, feces_litter, egg, feed, flock]
+      required: true
+      description: >
+        Objek yang harus terlihat di citra agar fitur ini bisa dinilai.
+        Crop RoI dari edge berisi individu ayam (bird) dan kadang
+        feses/litter di sekitarnya -- fitur egg/feed/flock butuh sumber
+        citra lain.
+    description:
+      type: string
+      required: true
+      description: Deskripsi Bahasa Indonesia yang ditampilkan ke MLLM & user.
+
+Symptom:
+  description: >
+    Gejala klinis yang TIDAK bisa dinilai dari citra (suara, bau, catatan
+    produksi/mortalitas) -- butuh pemeriksaan manual (InspectionAction).
+    Di output, Symptom adalah "gejala terkait", BUKAN bukti yang teramati.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^SY-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    observation_mode:
+      type: enum
+      values: [audio, olfactory, production_record, mortality_record]
+      required: true
+    description:
+      type: string
+      required: true
+
+EnvironmentalCondition:
+  description: >
+    Kondisi lingkungan/manajemen yang berkontribusi terhadap penyakit.
+    source=sensor: hasil normalisasi sensor (sensor_normalizer.py).
+    source=visual_observation / manual_inspection: faktor manajemen
+    (kepadatan, litter, pakan) yang diamati petugas -- BUKAN penyakit.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^EC-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    source:
+      type: enum
+      values: [sensor, visual_observation, manual_inspection]
+      required: true
+    description:
+      type: string
+      required: true
+    threshold_ref:
+      type: string
+      required: false
+      description: Referensi nilai ambang batas yang dipakai sensor_normalizer.
+
+InspectionAction:
+  description: >
+    Tindakan pemeriksaan manual atau rujukan lab. Ditampilkan SEGERA saat
+    case dibuat (Tahap 1 reveal, lihat Case.attach_reasoning_result).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^IA-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    instruction:
+      type: string
+      required: true
+    performed_by:
+      type: enum
+      values: [farmer, veterinarian_lab]
+      required: true
+
+MitigationAction:
+  description: >
+    Tindakan mitigasi/manajemen non-medis. Ditampilkan SETELAH user
+    konfirmasi "Sakit" dengan penyakit spesifik (Tahap 2 reveal).
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^MA-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    instruction:
+      type: string
+      required: true
+    priority:
+      type: enum
+      values: [low, medium, high]
+      required: true
+    data_status:
+      type: enum
+      values: [draft_literature, draft_general_knowledge, vet_validated]
+      required: true
+
+MedicalTreatment:
+  description: >
+    Referensi obat/terapi. Ditampilkan pada Tahap 2 reveal yang sama dengan
+    MitigationAction -- withdrawal_period WAJIB selalu terisi. SENGAJA belum
+    ada seed: data obat & dosis wajib berasal dari sumber tervalidasi dokter
+    hewan / label obat terdaftar, bukan dikarang.
+    HANYA data dummy (data_status = dummy, label "[DUMMY]") untuk pengujian
+    alur; data asli wajib dari sumber tervalidasi dokter hewan / label obat.
+  properties:
+    id:
+      type: string
+      required: true
+      pattern: "^MT-[0-9]{3}$"
+    name:
+      type: string
+      required: true
+    dosage:
+      type: string
+      required: true
+    withdrawal_period:
+      type: string
+      required: true
+      description: >
+        Wajib diisi meski "Tidak berlaku" untuk terapi suportif non-obat --
+        JANGAN pernah dikosongkan (MedicalReference.__post_init__ menolak
+        string kosong).

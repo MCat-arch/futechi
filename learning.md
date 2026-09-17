@@ -173,3 +173,277 @@ Poin pembelajaran yang paling penting dari fase ini adalah bahwa dalam sistem se
 - historical cage notes sebagai catatan tambahan yang dibatasi
 
 Ini adalah fondasi yang tepat untuk pengembangan lanjutan yang aman dan terdokumentasi.
+
+---
+
+## 9. Runbook infrastruktur: Postgres & Neo4j di Docker
+
+> Bagian 1–8 mencatat fase sebelum backend dibuat. Bagian ini mencatat kondisi
+> setelah repo menjadi monorepo (`packages/pipeline` + `packages/api`) dan
+> database dijalankan di Docker.
+
+### 9.1 Siapa menyimpan apa
+
+| Database | Container | Isi | Dipakai oleh |
+|---|---|---|---|
+| **PostgreSQL 16** | `futechi-postgres` | Data operasional: case, cage, frame, event dari edge, riwayat chat | `packages/api` |
+| **Neo4j 5.26** | `poultry-neo4j` | Knowledge graph: penyakit, fitur visual, gejala, pemeriksaan, mitigasi, obat | `packages/pipeline` (Modul B) |
+| **Redis 7** | `futechi-redis` | Antrean task Celery (bukan penyimpanan data) | API + worker |
+
+Aturannya: **Postgres = apa yang terjadi di kandang**, **Neo4j = pengetahuan penyakit**.
+Keduanya tidak saling menyalin data.
+
+PostgreSQL 17 native di `C:\Program Files\PostgreSQL\17` **tidak dipakai**. Service
+`postgresql-x64-17` sudah disetel `Manual` supaya tidak merebut port 5432 dari Docker.
+
+### 9.2 Di mana setup-nya
+
+| Yang ingin diubah | File |
+|---|---|
+| Kredensial & URL koneksi (satu untuk semua) | `.env` di root repo |
+| Container Postgres + Redis | `packages/api/docker-compose.yml` |
+| Container Neo4j yang sedang dipakai | `ops/docker/docker-compose.neo4j.yml` |
+| URL Postgres default & setting API | `packages/api/app/core/config.py` (`database_url`) |
+| Engine/session Postgres | `packages/api/app/core/database.py` (`get_db` untuk request, `task_session` untuk Celery) |
+| Struktur tabel Postgres | `packages/api/app/models/case.py` |
+| Kapan tabel dibuat | `packages/api/app/main.py` → `lifespan` menjalankan `create_all` saat API start |
+| Koneksi Neo4j & LLM | `packages/pipeline/src/futechi_graphrag/config/settings.py`, `infrastructure/neo4j/driver.py` |
+| Skema knowledge graph | `packages/pipeline/src/futechi_graphrag/pipelines/knowledge_graph/ontology/*.yaml` |
+| Constraint & index Neo4j | `.../knowledge_graph/cypher/constraints/`, `.../cypher/indexes/` |
+| Isi knowledge graph | `.../knowledge_graph/cypher/seeds/001–003_*.cypher` |
+| Pemuat seed | `packages/pipeline/scripts/bootstrap_neo4j.py` (+ `validate_seed_consistency.py`) |
+
+Variabel `.env` yang relevan:
+
+```env
+# Postgres (boleh tidak diisi; default-nya sudah cocok dengan compose)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/futechi
+# Neo4j
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=...
+NEO4J_DATABASE=neo4j
+```
+
+**Jebakan penting soal password:**
+- `POSTGRES_PASSWORD` dan `NEO4J_AUTH` di compose **hanya dipakai saat volume masih kosong**
+  (pertama kali container dibuat). Mengubah `.env` setelahnya **tidak** mengganti password
+  di database — ganti lewat SQL/Cypher, atau hapus volume (data ikut hilang).
+- `docker compose` membaca `.env` dari folder file compose, **bukan** root repo. Kalau ingin
+  compose memakai `.env` root, tambahkan `--env-file .env`. Tanpa itu, compose memakai nilai
+  default (`postgres/postgres`, `neo4j/change-me`).
+
+### 9.3 Menyalakan, menghentikan, memeriksa
+
+Dari root repo (`C:\Users\User\graphdb`):
+
+```powershell
+# nyalakan
+docker compose -f ops/docker/docker-compose.neo4j.yml up -d          # Neo4j
+docker compose -f packages/api/docker-compose.yml up -d postgres redis
+
+# status (Neo4j "unhealthy" boleh diabaikan: healthcheck-nya memakai curl
+# yang tidak ada di image Neo4j, padahal servernya jalan normal)
+docker ps
+
+# log
+docker logs futechi-postgres --tail 50
+docker logs poultry-neo4j --tail 50
+
+# hentikan (data TETAP ada di volume)
+docker compose -f packages/api/docker-compose.yml stop
+docker compose -f ops/docker/docker-compose.neo4j.yml stop
+```
+
+Jangan menjalankan service `neo4j` dari `packages/api/docker-compose.yml` selama
+`poultry-neo4j` dari `ops/docker` masih ada: nama container dan port 7687 sama.
+
+### 9.4 Melihat isi PostgreSQL
+
+**Cara 1 — `psql` di dalam container (tanpa instal apa pun):**
+
+```powershell
+docker exec -it futechi-postgres psql -U postgres -d futechi
+```
+
+Perintah dasar di dalam `psql`:
+
+| Perintah | Fungsi |
+|---|---|
+| `\dt` | daftar tabel |
+| `\d cases` | struktur satu tabel |
+| `\x` | tampilan per-kolom (enak untuk kolom JSON panjang) |
+| `\q` | keluar |
+
+Query yang sering dipakai:
+
+```sql
+-- daftar alert terbaru
+SELECT id, cage_id, status, severity_level, alert_count, requires_manual_review, last_detected_at
+FROM cases ORDER BY last_detected_at DESC LIMIT 10;
+
+-- detail hasil diagnosis satu case (kolom JSON dirapikan)
+SELECT jsonb_pretty(visual_features::jsonb)    AS fitur,
+       jsonb_pretty(related_conditions::jsonb) AS kandidat,
+       jsonb_pretty(recommended_checks::jsonb) AS pemeriksaan,
+       pipeline_status, pipeline_notes, error
+FROM cases WHERE id = '<case_id>';
+
+-- status monitoring kandang (exclusion / cooldown / safety-net)
+SELECT cage_id, status, cooldown_reason, cooldown_cycles_remaining,
+       anomaly_count_during_cooldown, active_case_id
+FROM cages ORDER BY updated_at DESC;
+
+-- semua event dari edge, termasuk yang di-skip
+SELECT event_id, cage_id, outcome, case_id, created_at
+FROM detection_events ORDER BY created_at DESC LIMIT 20;
+
+-- riwayat chat satu case + kandidat yang dipakai sebagai dasar jawaban
+SELECT role, left(content, 100) AS isi, graph_scope, created_at
+FROM chat_messages WHERE case_id = '<case_id>' ORDER BY created_at;
+```
+
+Sekali jalan tanpa masuk ke `psql`:
+
+```powershell
+docker exec futechi-postgres psql -U postgres -d futechi -c "select status, count(*) from cases group by status"
+```
+
+**Cara 2 — pgAdmin 4 (GUI, sudah terpasang bersama PostgreSQL native):**
+
+Register → Server, lalu isi:
+
+| Tab | Isian |
+|---|---|
+| General → Name | `futechi-docker` |
+| Connection → Host | `localhost` |
+| Port | `5432` |
+| Maintenance database | `futechi` |
+| Username / Password | `postgres` / `postgres` |
+
+Tabel ada di **Servers → futechi-docker → Databases → futechi → Schemas → public → Tables**.
+Klik kanan tabel → **View/Edit Data → All Rows**.
+pgAdmin hanya dipakai sebagai penampil; server yang terhubung tetap Postgres di Docker.
+
+**Membersihkan data uji** (struktur tabel tetap ada):
+
+```powershell
+docker exec futechi-postgres psql -U postgres -d futechi -c "TRUNCATE chat_messages, frames, detection_events, cases, cages CASCADE;"
+```
+
+Saat runbook ini ditulis, Postgres masih berisi 2 case sisa smoke test (cage `SMOKE-1`).
+Hindari `docker compose down -v` kecuali memang ingin menghapus volume beserta seluruh data.
+
+### 9.5 Melihat isi Neo4j
+
+**Cara 1 — Neo4j Browser (GUI, paling informatif karena bisa melihat bentuk graph):**
+
+1. Buka **http://localhost:7474**
+2. Connect URL: `neo4j://localhost:7687`
+3. Username / password: sesuai `NEO4J_USERNAME` / `NEO4J_PASSWORD` di `.env`
+
+Query yang berguna (ketik di kotak atas lalu Ctrl+Enter):
+
+```cypher
+// jumlah node per label
+MATCH (n) RETURN labels(n)[0] AS label, count(*) AS jumlah ORDER BY label;
+
+// satu penyakit beserta semua relasinya (tampil sebagai graph)
+MATCH (d:Disease {id: "DIS-001"})-[r]->(x) RETURN d, r, x;
+
+// penyakit apa saja yang punya fitur tertentu, urut dari yang paling khas
+MATCH (d:Disease)-[r:HAS_VISUAL_FEATURE]->(:VisualFeature {name: "conjunctivitis"})
+RETURN d.name, r.specificity, r.clinical_note
+ORDER BY CASE r.specificity WHEN "high" THEN 0 WHEN "medium" THEN 1 ELSE 2 END;
+
+// penyakit wajib lapor
+MATCH (d:Disease {notifiable: true}) RETURN d.id, d.name;
+
+// data dummy yang harus diganti sebelum dipakai di lapangan
+MATCH (n) WHERE n.data_status = "dummy" RETURN labels(n)[0] AS label, n.id, n.name;
+
+// file seed yang sudah diterapkan
+MATCH (m:_SchemaMigration) RETURN m.filename, m.applied_at ORDER BY m.filename;
+
+// gambaran keseluruhan (dibatasi supaya browser tidak berat)
+MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 150;
+```
+
+**Cara 2 — `cypher-shell` di dalam container (terminal):**
+
+```powershell
+docker exec -it poultry-neo4j cypher-shell -u neo4j -p "<NEO4J_PASSWORD>"
+```
+
+Keluar dengan `:exit`. Contoh sekali jalan:
+
+```powershell
+docker exec poultry-neo4j cypher-shell -u neo4j -p "<NEO4J_PASSWORD>" "MATCH (d:Disease) RETURN count(d)"
+```
+
+**Mengisi ulang knowledge graph** (hanya bila file seed berubah; file yang sudah tercatat
+di `_SchemaMigration` tidak dijalankan ulang tanpa `--reset`):
+
+```powershell
+python packages/pipeline/scripts/validate_seed_consistency.py
+python packages/pipeline/scripts/bootstrap_neo4j.py --reset --yes
+```
+
+`--reset` menghapus **seluruh** node Neo4j (constraint & index tetap).
+
+### 9.6 Cek cepat semua koneksi
+
+```powershell
+docker ps
+docker exec futechi-postgres pg_isready -U postgres
+docker exec futechi-redis redis-cli ping
+curl.exe -s -o NUL -w "Neo4j Browser HTTP %{http_code}`n" http://localhost:7474
+```
+
+Hasil yang diharapkan: tiga container `Up`, `accepting connections`, `PONG`, dan `HTTP 200`.
+
+### 9.7 Masalah yang sering muncul
+
+| Gejala | Penyebab | Solusi |
+|---|---|---|
+| API gagal start: `connection refused` ke 5432 | Postgres container mati | `docker compose -f packages/api/docker-compose.yml up -d postgres` |
+| Data di pgAdmin berbeda dari yang dilihat API | pgAdmin terhubung ke Postgres native | Pastikan service `postgresql-x64-17` berhenti; cek host/port di pgAdmin |
+| `password authentication failed` padahal `.env` sudah diubah | Password hanya di-set saat volume pertama dibuat | Ubah via `ALTER USER`, atau pakai password lama |
+| Neo4j Browser menolak login | Sama: `NEO4J_AUTH` hanya berlaku saat volume pertama dibuat | Pakai password awal, atau ubah lewat `ALTER CURRENT USER SET PASSWORD` |
+| Retrieval selalu kosong | Neo4j belum di-seed / seed sebagian | Jalankan query "jumlah node per label", lalu `bootstrap_neo4j.py --reset --yes` |
+| Neo4j `unhealthy` | Healthcheck image memakai `curl` yang tidak tersedia | Abaikan selama port 7474/7687 merespons |
+
+### 9.8 Graph kedua: data buku (`poultry-neo4j-buku`)
+
+| | Graph utama | Graph buku |
+|---|---|---|
+| Container | `poultry-neo4j` | `poultry-neo4j-buku` |
+| Compose | `ops/docker/docker-compose.neo4j.yml` | `ops/docker/docker-compose.neo4j-buku.yml` |
+| Browser | http://localhost:7474 | http://localhost:7475 (Connect URL `neo4j://localhost:7688`) |
+| Bolt | `bolt://localhost:7687` | `bolt://localhost:7688` |
+| Isi | seed 001–003 (kontrak pipeline) | `004_seed_data_penyakit_buku.json`: 826 node, 887 relasi |
+| Diisi oleh | `scripts/bootstrap_neo4j.py` | `scripts/seed_graph_buku.py` |
+| Kredensial | `NEO4J_PASSWORD` (baris `# [GRAPH UTAMA]`) | `NEO4J_BUKU_PASSWORD` |
+
+```powershell
+# dari root repo
+docker compose --env-file .env -f ops/docker/docker-compose.neo4j-buku.yml up -d
+python packages/pipeline/scripts/seed_graph_buku.py --dry-run
+python packages/pipeline/scripts/seed_graph_buku.py --hapus-semua   # isi ulang dari nol
+```
+
+Program (pipeline & API) memilih graph lewat `NEO4J_*` di `.env` root. Saat ini
+nilainya menunjuk **graph buku**. Untuk kembali ke graph utama: hapus empat baris
+`NEO4J_*` yang aktif dan buka komentar baris `# [GRAPH UTAMA]`.
+
+Hal yang perlu diperhatikan selama program terhubung ke graph buku:
+- Jangan jalankan `bootstrap_neo4j.py` karena perintah itu akan menulis seed 001–003
+  ke graph buku (atau menghapusnya bila memakai `--reset`).
+- Diagnosis selalu mengembalikan 0 kandidat. Validasi ontologi hanya menerima nama
+  kanonik (`bloody_feces`), sedangkan VisualFeature di buku berupa kalimat bebas
+  ("Kulit tidak terlalu memerah"), sehingga tidak ada yang cocok.
+- Integration test pipeline (`tests/integration`) mengharapkan data seed 001–003,
+  jadi test itu akan gagal.
+- Buku memakai label `Treatment`/`BiosecurityMeasure` dengan properti `teks`. Pipeline
+  membaca `Medication`/`MitigationAction` dengan properti `name`, jadi obat dan
+  mitigasi tidak ikut terbaca.
